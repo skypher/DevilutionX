@@ -40,6 +40,7 @@
 #include "monster.h"
 #include "objdat.h"
 #include "options.h"
+#include "multi.h"
 #include "qol/stash.h"
 #include "stores.h"
 #include "towners.h"
@@ -210,6 +211,19 @@ shrine_gametype shrineavail[] = {
 	ShrineTypeSingle, // Solar,
 	ShrineTypeAny,    // Murphy's
 };
+
+[[nodiscard]] bool ShouldDisableCripplingShrines()
+{
+	if (gbIsMultiplayer)
+		return sgGameInitInfo.IsDisablingCripplingShrines();
+
+	return *GetOptions().Gameplay.disableCripplingShrines;
+}
+
+[[nodiscard]] bool IsCripplingShrineType(shrine_type type)
+{
+	return IsAnyOf(type, shrine_type::ShrineFascinating, shrine_type::ShrineOrnate, shrine_type::ShrineSacred, shrine_type::ShrineMurphys);
+}
 /** Maps from book_id to book name. */
 const char *const StoryBookName[] = {
 	N_(/* TRANSLATORS: Book Title */ "The Great Conflict"),
@@ -3195,8 +3209,11 @@ void OperateArmorStand(Object &armorStand, bool sendmsg, bool sendLootMsg)
 int FindValidShrine()
 {
 	for (;;) {
-		const int rv = GenerateRnd(gbIsHellfire ? NumberOfShrineTypes : 26);
-		if ((rv == ShrineEnchanted && !IsAnyOf(leveltype, DTYPE_CATHEDRAL, DTYPE_CATACOMBS)) || rv == ShrineThaumaturgic)
+		const shrine_type type = static_cast<shrine_type>(GenerateRnd(gbIsHellfire ? NumberOfShrineTypes : 26));
+		const int rv = static_cast<int>(type);
+		if ((type == shrine_type::ShrineEnchanted && !IsAnyOf(leveltype, DTYPE_CATHEDRAL, DTYPE_CATACOMBS)) || type == shrine_type::ShrineThaumaturgic)
+			continue;
+		if (ShouldDisableCripplingShrines() && IsCripplingShrineType(type))
 			continue;
 		if (gbIsMultiplayer && shrineavail[rv] == ShrineTypeSingle)
 			continue;
@@ -3630,16 +3647,13 @@ unsigned int Object::GetId() const
 
 bool Object::IsDisabled() const
 {
-	if (!*GetOptions().Gameplay.disableCripplingShrines) {
+	if (!ShouldDisableCripplingShrines()) {
 		return false;
-	}
-	if (IsAnyOf(_otype, _object_id::OBJ_GOATSHRINE, _object_id::OBJ_CAULDRON)) {
-		return true;
 	}
 	if (!IsShrine()) {
 		return false;
 	}
-	return IsAnyOf(static_cast<shrine_type>(_oVar1), shrine_type::ShrineFascinating, shrine_type::ShrineOrnate, shrine_type::ShrineSacred, shrine_type::ShrineMurphys);
+	return IsCripplingShrineType(static_cast<shrine_type>(_oVar1));
 }
 
 Object *FindObjectAtPosition(Point position, bool considerLargeObjects)
