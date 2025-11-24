@@ -29,6 +29,7 @@ set(tests
   missiles_test
   multi_logging_test
   pack_test
+  packet_playerinfo_test
   player_test
   quests_test
   scrollrt_test

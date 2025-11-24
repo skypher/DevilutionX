@@ -58,7 +58,7 @@ private:
 
 	struct GameListValue {
 		GameData data;
-		std::vector<std::string> playerNames;
+		std::vector<PlayerInfo> players;
 		endpoint_t peer;
 	};
 	ankerl::unordered_dense::map</*name*/ std::string, GameListValue> game_list;
@@ -143,8 +143,13 @@ bool base_protocol<P>::send_info_request()
 	}
 	if (!*status)
 		return false;
+	// Send protocol version so host knows we support class/level data
+	// Protocol versions: 0 = legacy (implicit, no version sent), 1 = supports class/level
+	buffer_t protocolVersion;
+	protocolVersion.resize(1);
+	protocolVersion[0] = 1;
 	tl::expected<std::unique_ptr<packet>, PacketError> pkt
-	    = pktfty->make_packet<PT_INFO_REQUEST>(PLR_BROADCAST, PLR_MASTER);
+	    = pktfty->make_packet<PT_INFO_REQUEST>(PLR_BROADCAST, PLR_MASTER, protocolVersion);
 	if (!pkt.has_value()) {
 		LogError("make_packet: {}", pkt.error().what());
 		return false;
@@ -370,19 +375,21 @@ template <class P>
 tl::expected<void, PacketError> base_protocol<P>::recv_decrypted(packet &pkt, endpoint_t sender)
 {
 	if (pkt.Source() == PLR_BROADCAST && pkt.Destination() == PLR_MASTER && pkt.Type() == PT_INFO_REPLY) {
-		size_t neededSize = sizeof(GameData) + (PlayerNameLength * MAX_PLRS);
+		size_t minNeededSize = sizeof(GameData) + (PlayerNameLength * MAX_PLRS);
 		const tl::expected<const buffer_t *, PacketError> pktInfo = pkt.Info();
 		if (!pktInfo.has_value())
 			return tl::make_unexpected(pktInfo.error());
 		const buffer_t &infoBuffer = **pktInfo;
-		if (infoBuffer.size() < neededSize)
+		if (infoBuffer.size() < minNeededSize)
 			return {};
 		GameData gameData;
 		std::memcpy(&gameData, infoBuffer.data(), sizeof(GameData));
 		gameData.swapLE();
 		if (gameData.size != sizeof(GameData))
 			return {};
-		std::vector<std::string> playerNames;
+
+		// Parse player names
+		std::vector<PlayerInfo> players;
 		for (size_t i = 0; i < Players.size(); i++) {
 			std::string_view playerNameBuffer {
 				reinterpret_cast<const char *>(infoBuffer.data() + sizeof(GameData) + (i * PlayerNameLength)),
@@ -392,14 +399,42 @@ tl::expected<void, PacketError> base_protocol<P>::recv_decrypted(packet &pkt, en
 				playerNameBuffer.remove_suffix(playerNameBuffer.size() - nullPos);
 			}
 			if (!playerNameBuffer.empty()) {
-				playerNames.emplace_back(playerNameBuffer);
+				PlayerInfo playerInfo;
+				playerInfo.name = std::string(playerNameBuffer);
+				players.push_back(std::move(playerInfo));
 			}
 		}
+
+		// Check if this is new format with class/level data
+		size_t classLevelDataSize = 2 * MAX_PLRS;
+		size_t newFormatSize = minNeededSize + classLevelDataSize;
+		bool hasClassLevelData = (infoBuffer.size() >= newFormatSize + 1); // +1 for at least 1 char game name
+
+		if (hasClassLevelData) {
+			// Parse class and level data
+			size_t classLevelOffset = sizeof(GameData) + (PlayerNameLength * MAX_PLRS);
+			size_t playerIdx = 0;
+			for (size_t i = 0; i < MAX_PLRS && playerIdx < players.size(); i++) {
+				uint8_t playerClass = infoBuffer[classLevelOffset + i];
+				uint8_t playerLevel = infoBuffer[classLevelOffset + MAX_PLRS + i];
+				if (playerClass != 0 || playerLevel != 0) {
+					if (playerIdx < players.size()) {
+						players[playerIdx].heroClass = static_cast<HeroClass>(playerClass);
+						players[playerIdx].level = playerLevel;
+						playerIdx++;
+					}
+				}
+			}
+		}
+
+		// Parse game name
 		std::string gameName;
-		size_t gameNameSize = infoBuffer.size() - neededSize;
+		size_t gameNameOffset = minNeededSize + (hasClassLevelData ? classLevelDataSize : 0);
+		size_t gameNameSize = infoBuffer.size() - gameNameOffset;
 		gameName.resize(gameNameSize);
-		std::memcpy(&gameName[0], infoBuffer.data() + neededSize, gameNameSize);
-		game_list[gameName] = GameListValue { gameData, std::move(playerNames), sender };
+		std::memcpy(&gameName[0], infoBuffer.data() + gameNameOffset, gameNameSize);
+
+		game_list[gameName] = GameListValue { gameData, std::move(players), sender };
 		return {};
 	}
 	return recv_ingame(pkt, sender);
@@ -416,9 +451,23 @@ tl::expected<void, PacketError> base_protocol<P>::recv_ingame(packet &pkt, endpo
 			}
 		} else if (pkt.Type() == PT_INFO_REQUEST) {
 			if ((plr_self != PLR_BROADCAST) && (get_master() == plr_self)) {
+				// Check if client supports class/level data by checking protocol version
+				// Protocol version 0 (implicit/missing) = legacy, 1+ = supports class/level
+				bool clientSupportsClassLevel = false;
+				const tl::expected<const buffer_t *, PacketError> pktInfo = pkt.Info();
+				if (pktInfo.has_value() && (*pktInfo)->size() >= 1) {
+					uint8_t protocolVersion = (*pktInfo)->data()[0];
+					clientSupportsClassLevel = (protocolVersion >= 1);
+				}
+
 				buffer_t buf;
-				buf.resize(game_init_info.size() + (PlayerNameLength * MAX_PLRS) + gamename.size());
+				size_t classLevelDataSize = clientSupportsClassLevel ? (2 * MAX_PLRS) : 0;
+				buf.resize(game_init_info.size() + (PlayerNameLength * MAX_PLRS) + classLevelDataSize + gamename.size());
+
+				// Copy GameData
 				std::memcpy(buf.data(), &game_init_info[0], game_init_info.size());
+
+				// Copy player names
 				for (size_t i = 0; i < Players.size(); i++) {
 					if (Players[i].plractive) {
 						std::memcpy(buf.data() + game_init_info.size() + (i * PlayerNameLength), &Players[i]._pName, PlayerNameLength);
@@ -426,7 +475,24 @@ tl::expected<void, PacketError> base_protocol<P>::recv_ingame(packet &pkt, endpo
 						std::memset(buf.data() + game_init_info.size() + (i * PlayerNameLength), '\0', PlayerNameLength);
 					}
 				}
-				std::memcpy(buf.data() + game_init_info.size() + (PlayerNameLength * MAX_PLRS), &gamename[0], gamename.size());
+
+				// If client supports it, add class and level data
+				if (clientSupportsClassLevel) {
+					size_t classLevelOffset = game_init_info.size() + (PlayerNameLength * MAX_PLRS);
+					for (size_t i = 0; i < Players.size(); i++) {
+						if (Players[i].plractive) {
+							buf[classLevelOffset + i] = static_cast<uint8_t>(Players[i]._pClass);
+							buf[classLevelOffset + MAX_PLRS + i] = Players[i].getCharacterLevel();
+						} else {
+							buf[classLevelOffset + i] = 0;
+							buf[classLevelOffset + MAX_PLRS + i] = 0;
+						}
+					}
+				}
+
+				// Copy game name
+				std::memcpy(buf.data() + game_init_info.size() + (PlayerNameLength * MAX_PLRS) + classLevelDataSize, &gamename[0], gamename.size());
+
 				tl::expected<std::unique_ptr<packet>, PacketError> reply
 				    = pktfty->make_packet<PT_INFO_REPLY>(PLR_BROADCAST, PLR_MASTER, buf);
 				if (!reply.has_value()) {

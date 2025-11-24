@@ -6,11 +6,13 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "dvlnet/leaveinfo.hpp"
 #include "msg.h"
+#include "playerdat.hpp"
 #include "utils/attributes.h"
 
 namespace devilution {
@@ -43,11 +45,18 @@ struct GameData {
 	void swapLE();
 };
 
+/* @brief Contains info about a player in a game */
+struct PlayerInfo {
+	std::string name;
+	std::optional<HeroClass> heroClass; // Optional for backward compatibility
+	std::optional<uint8_t> level;       // Optional for backward compatibility
+};
+
 /* @brief Contains info of running public game (for game list browsing) */
 struct GameInfo {
 	std::string name;
 	GameData gameData;
-	std::vector<std::string> players;
+	std::vector<PlayerInfo> players;
 	std::optional<int> latency;
 	std::optional<bool> peerIsRelayed;
 };
