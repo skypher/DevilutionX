@@ -18,6 +18,7 @@
 #endif
 
 #include <fmt/core.h>
+#include <fmt/format.h>
 
 #include "DiabloUI/diabloui.h"
 #include "DiabloUI/hero/selhero.h"
@@ -33,6 +34,7 @@
 #include "menu.h"
 #include "multi.h"
 #include "options.h"
+#include "playerdat.hpp"
 #include "storm/storm_net.hpp"
 #include "utils/language.h"
 #include "utils/str_cat.hpp"
@@ -284,8 +286,12 @@ void selgame_GameSelection_Focus(size_t value)
 			}
 			infoString += '\n';
 			infoString.append(_("Players: "));
-			for (const auto &playerName : gameInfo.players) {
-				infoString.append(playerName);
+			for (const auto &playerInfo : gameInfo.players) {
+				infoString.append(playerInfo.name);
+				if (playerInfo.heroClass.has_value() && playerInfo.level.has_value()) {
+					std::string_view className = _(GetPlayerDataForClass(*playerInfo.heroClass).className);
+					infoString.append(fmt::format(" ({:s} {:d})", className, *playerInfo.level));
+				}
 				infoString += ' ';
 			}
 			infoString += '\n';

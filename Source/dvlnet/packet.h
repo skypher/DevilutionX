@@ -217,7 +217,7 @@ tl::expected<void, PacketError> packet_proc<P>::process_data()
 	case PT_INFO_REPLY:
 		return self.process_element(m_info);
 	case PT_INFO_REQUEST:
-		return {};
+		return self.process_element(m_info);
 	case PT_ECHO_REQUEST:
 	case PT_ECHO_REPLY:
 		return self.process_element(m_time);
@@ -261,6 +261,18 @@ inline void packet_out::create<PT_INFO_REQUEST>(plr_t s, plr_t d)
 	m_type = PT_INFO_REQUEST;
 	m_src = s;
 	m_dest = d;
+}
+
+template <>
+inline void packet_out::create<PT_INFO_REQUEST>(plr_t s, plr_t d, buffer_t i)
+{
+	if (have_encrypted || have_decrypted)
+		ABORT();
+	have_decrypted = true;
+	m_type = PT_INFO_REQUEST;
+	m_src = s;
+	m_dest = d;
+	m_info = std::move(i);
 }
 
 template <>
