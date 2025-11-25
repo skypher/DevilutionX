@@ -376,7 +376,7 @@ TEST(PacketPlayerInfoTest, EdgeCases_LevelBoundaries)
 }
 
 // This struct mirrors devilutionx-gamelist's GameData struct for compatibility testing
-// See: https://github.com/diasurgical/devilutionx-gamelist/blob/main/main.cpp
+// As of 25 Nov 2025: https://github.com/diasurgical/devilutionx-gamelist/blob/f57fe37f0ab4d3ed80326acaab473208b9e6ebff/main.cpp
 struct GamelistGameData {
 	int32_t size;
 	uint32_t seed;
