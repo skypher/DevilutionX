@@ -72,7 +72,7 @@ namespace {
 void DiscoverMods()
 {
 	// Add mods available by default:
-	std::unordered_set<std::string> modNames = { "clock" };
+	std::unordered_set<std::string> modNames = { "clock", "townsfolk_relocation" };
 
 	if (HaveHellfire()) {
 		modNames.insert("Hellfire");
