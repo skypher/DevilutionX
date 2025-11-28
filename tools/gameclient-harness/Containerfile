@@ -1,0 +1,15 @@
+FROM debian:bookworm-slim
+
+# Minimal tools: ZeroTier daemon, Python for the simulator/listener, and networking utils.
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    zerotier-one python3 iproute2 iputils-ping net-tools ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/harness
+
+COPY entrypoint.sh sim_pt_info.py listener_gamelist_test.py ./
+
+ENV ZT_HOME=/var/lib/zerotier-one
+
+ENTRYPOINT ["/opt/harness/entrypoint.sh"]
