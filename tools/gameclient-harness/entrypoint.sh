@@ -15,7 +15,7 @@ start_zerotier() {
 
 wait_daemon() {
 	for _ in $(seq 1 50); do
-		if zerotier-cli -D "${ZT_HOME}" info >/dev/null 2>&1; then
+		if zerotier-cli -D"${ZT_HOME}" info >/dev/null 2>&1; then
 			return 0
 		fi
 		sleep 0.2
@@ -29,21 +29,26 @@ create_network() {
 		log "Reusing existing network id $(cat "${ZT_NET_ID_FILE}")"
 		return 0
 	fi
-	NET_ID=$(zerotier-cli -D "${ZT_HOME}" create | tr -d '\r\n')
+	# Get our ZeroTier address (10 hex chars)
+	ZT_ADDR=$(zerotier-cli -D"${ZT_HOME}" info | awk '{print $3}')
+	TOKEN=$(cat "${ZT_HOME}/authtoken.secret")
+	# Network ID = our address + 6 random hex chars
+	NET_SUFFIX=$(head -c 3 /dev/urandom | od -An -tx1 | tr -d ' \n')
+	NET_ID="${ZT_ADDR}${NET_SUFFIX}"
+	log "Creating network ${NET_ID} via controller API"
+	# Create network via local controller API with private=false (open network)
+	curl -s -X POST "http://127.0.0.1:9993/controller/network/${NET_ID}" \
+		-H "X-ZT1-Auth: ${TOKEN}" \
+		-d '{"private": false}' >/dev/null
 	log "Created network ${NET_ID}"
-	# Make it open (no manual member authorization needed) and managed (ZT assigns addresses).
-	zerotier-cli -D "${ZT_HOME}" set "${NET_ID}" private=0
-	zerotier-cli -D "${ZT_HOME}" set "${NET_ID}" allowManaged=1
-	zerotier-cli -D "${ZT_HOME}" set "${NET_ID}" allowGlobal=0
-	zerotier-cli -D "${ZT_HOME}" set "${NET_ID}" allowDefault=0
 	echo -n "${NET_ID}" >"${ZT_NET_ID_FILE}"
 }
 
 join_network() {
 	NET_ID=$(cat "${ZT_NET_ID_FILE}")
-	zerotier-cli -D "${ZT_HOME}" join "${NET_ID}"
+	zerotier-cli -D"${ZT_HOME}" join "${NET_ID}"
 	for _ in $(seq 1 50); do
-		if zerotier-cli -D "${ZT_HOME}" listnetworks | grep -q "${NET_ID}.*OK"; then
+		if zerotier-cli -D"${ZT_HOME}" listnetworks | grep -q "${NET_ID}.*OK"; then
 			return 0
 		fi
 		sleep 0.2

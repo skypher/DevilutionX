@@ -79,20 +79,54 @@ build)
 	build_image
 	;;
 run)
-	ensure_state
+	# Run in a single container - multi-container ZeroTier is complex due to network discovery
 	build_image
-	start_controller
-	# Give controller time to create the net.id
-	sleep 1
-	if [ ! -s "${STATE_DIR}/net.id" ]; then
-		echo "Waiting for controller to create network id..."
-		sleep 1
-	fi
-	start_node zt-host host host
-	start_node zt-client client client
-	wait_ready zt-host
-	wait_ready zt-client
-	run_listener
+	podman run --rm \
+		--cap-add=NET_ADMIN --device /dev/net/tun \
+		--entrypoint /bin/sh \
+		"${IMAGE_TAG}" -c '
+			set -e
+			# Start ZeroTier
+			zerotier-one -d /var/lib/zerotier-one
+			sleep 3
+
+			# Get our address and create a network
+			ZT_ADDR=$(zerotier-cli info | awk "{print \$3}")
+			TOKEN=$(cat /var/lib/zerotier-one/authtoken.secret)
+			NET_SUFFIX=$(head -c 3 /dev/urandom | od -An -tx1 | tr -d " \n")
+			NET_ID="${ZT_ADDR}${NET_SUFFIX}"
+
+			echo "[harness] Creating network ${NET_ID}"
+			curl -s -X POST "http://127.0.0.1:9993/controller/network/${NET_ID}" \
+				-H "X-ZT1-Auth: ${TOKEN}" \
+				-d "{\"private\": false}" >/dev/null
+
+			# Join our own network
+			zerotier-cli join "${NET_ID}" >/dev/null
+
+			# Wait for network to be ready
+			for i in $(seq 1 30); do
+				if zerotier-cli listnetworks | grep -q "${NET_ID}.*OK"; then
+					break
+				fi
+				sleep 0.5
+			done
+
+			# Get ZeroTier interface
+			ZT_IFACE=$(ip link | grep zt | awk -F: "{print \$2}" | tr -d " ")
+			if [ -z "${ZT_IFACE}" ]; then
+				ZT_IFACE=lo
+				export SKIP_BINDTODEVICE=1
+			fi
+			echo "[harness] Using interface: ${ZT_IFACE}"
+
+			# Start simulator in background
+			SKIP_BINDTODEVICE=1 ZT_IFACE="${ZT_IFACE}" python3 /opt/harness/sim_pt_info.py &
+			sleep 1
+
+			# Run listener
+			SKIP_BINDTODEVICE=1 ZT_IFACE="${ZT_IFACE}" python3 /opt/harness/listener_gamelist_test.py
+		'
 	;;
 local)
 	ensure_state
