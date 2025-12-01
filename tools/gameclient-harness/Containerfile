@@ -1,0 +1,16 @@
+FROM debian:bookworm-slim
+
+# Install zerotier-one from ZeroTier's official install script (includes controller support).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    python3 iproute2 iputils-ping net-tools ca-certificates curl gnupg \
+ && curl -s https://install.zerotier.com | bash \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/harness
+
+COPY entrypoint.sh sim_pt_info.py listener_gamelist_test.py ./
+
+ENV ZT_HOME=/var/lib/zerotier-one
+
+ENTRYPOINT ["/opt/harness/entrypoint.sh"]
