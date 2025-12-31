@@ -10,11 +10,13 @@
 #include <config.h>
 
 #include "appfat.h"
+#include "effects.h"
 #include "engine/assets.hpp"
 #include "lua/modules/audio.hpp"
 #include "lua/modules/hellfire.hpp"
 #include "lua/modules/i18n.hpp"
 #include "lua/modules/items.hpp"
+#include "lua/modules/level.hpp"
 #include "lua/modules/log.hpp"
 #include "lua/modules/monsters.hpp"
 #include "lua/modules/player.hpp"
@@ -229,6 +231,13 @@ void LuaReloadActiveMods()
 		handler();
 	}
 
+	// Reload sound effects in case a mod archive overrides effects.tsv
+	effects_cleanup_sfx();
+	if (gbRunGame)
+		sound_init();
+	else
+		ui_sound_init();
+
 	// Reload game data (this can probably be done later in the process to avoid having to reload it)
 	LoadTextData();
 	LoadPlayerDataFiles();
@@ -268,6 +277,7 @@ void LuaInitialize()
 	    "devilutionx.version", PROJECT_VERSION,
 	    "devilutionx.i18n", LuaI18nModule(lua),
 	    "devilutionx.items", LuaItemModule(lua),
+	    "devilutionx.level", LuaLevelModule(lua),
 	    "devilutionx.log", LuaLogModule(lua),
 	    "devilutionx.audio", LuaAudioModule(lua),
 	    "devilutionx.monsters", LuaMonstersModule(lua),

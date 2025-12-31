@@ -18,6 +18,14 @@
 namespace devilution {
 namespace net {
 
+void base::process_network_packets()
+{
+	tl::expected<void, PacketError> result = poll();
+	if (!result.has_value()) {
+		LogVerbose("Error polling network: {}", result.error().what());
+	}
+}
+
 void base::setup_gameinfo(buffer_t info)
 {
 	game_init_info = std::move(info);
@@ -147,6 +155,10 @@ tl::expected<void, PacketError> base::HandleDisconnect(packet &pkt)
 
 tl::expected<void, PacketError> base::HandleEchoRequest(packet &pkt)
 {
+	// If we have already left the game,
+	// there is no need to respond to echoes
+	if (plr_self == PLR_BROADCAST) return {};
+
 	return pkt.Time()
 	    .and_then([&](cookie_t &&pktTime) {
 		    return pktfty->make_packet<PT_ECHO_REPLY>(plr_self, pkt.Source(), pktTime);
@@ -160,6 +172,7 @@ tl::expected<void, PacketError> base::HandleEchoReply(packet &pkt)
 {
 	const uint32_t now = SDL_GetTicks();
 	plr_t src = pkt.Source();
+	if (src >= MAX_PLRS) return {};
 	return pkt.Time().transform([&](cookie_t &&pktTime) {
 		PlayerState &playerState = playerStateTable_[src];
 		playerState.roundTripLatency = now - pktTime;
@@ -233,7 +246,7 @@ bool base::SNetReceiveMessage(uint8_t *sender, void **data, size_t *size)
 			SendEchoRequest(i);
 		lastEchoTime = now;
 	}
-	poll();
+	process_network_packets();
 	if (message_queue.empty())
 		return false;
 	message_last = message_queue.front();
@@ -281,10 +294,8 @@ bool base::AllTurnsArrived()
 			continue;
 
 		const std::deque<turn_t> &turnQueue = playerState.turnQueue;
-		if (turnQueue.empty()) {
-			LogDebug("Turn missing from player {}", i);
+		if (turnQueue.empty())
 			return false;
-		}
 	}
 
 	return true;
@@ -292,7 +303,7 @@ bool base::AllTurnsArrived()
 
 bool base::SNetReceiveTurns(char **data, size_t *size, uint32_t *status)
 {
-	poll();
+	process_network_packets();
 
 	for (size_t i = 0; i < Players.size(); ++i) {
 		status[i] = 0;
@@ -528,7 +539,7 @@ plr_t base::GetOwner()
 
 bool base::SNetGetOwnerTurnsWaiting(uint32_t *turns)
 {
-	poll();
+	process_network_packets();
 
 	const plr_t owner = GetOwner();
 	const PlayerState &playerState = playerStateTable_[owner];

@@ -25,6 +25,8 @@ set(tests
   effects_test
   inv_test
   items_test
+  lua_player_test
+  mana_shield_integration_test
   math_test
   missiles_test
   multi_logging_test
@@ -35,6 +37,7 @@ set(tests
   stores_test
   tile_properties_test
   timedemo_test
+  townerdat_test
   writehero_test
   vendor_test
 )
@@ -169,6 +172,16 @@ if(DEVILUTIONX_SCREENSHOT_FORMAT STREQUAL DEVILUTIONX_SCREENSHOT_FORMAT_PNG AND 
       kerning_fit_spacing__align_right.png
       vertical_overflow.png
       vertical_overflow-colors.png
+      cursor-start.png
+      cursor-middle.png
+      cursor-end.png
+      multiline_cursor-end_first_line.png
+      multiline_cursor-start_second_line.png
+      multiline_cursor-middle_second_line.png
+      multiline_cursor-end_second_line.png
+      highlight-partial.png
+      highlight-full.png
+      multiline_highlight.png
     SRC_PREFIX test/fixtures/text_render_integration_test/
     OUTPUT_DIR "${DEVILUTIONX_TEST_FIXTURES_OUTPUT_DIRECTORY}/text_render_integration_test"
     OUTPUT_VARIABLE _text_render_integration_test_fixtures

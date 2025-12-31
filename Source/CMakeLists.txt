@@ -6,7 +6,6 @@ set(libdevilutionx_SRCS
   appfat.cpp
   automap.cpp
   capture.cpp
-  control.cpp
   cursor.cpp
   dead.cpp
   debug.cpp
@@ -34,8 +33,16 @@ set(libdevilutionx_SRCS
   sync.cpp
   textdat.cpp
   tmsg.cpp
+  townerdat.cpp
   towners.cpp
   track.cpp
+
+  control/control_chat.cpp
+  control/control_chat_commands.cpp
+  control/control_flasks.cpp
+  control/control_gold.cpp
+  control/control_infobox.cpp
+  control/control_panel.cpp
 
   controls/axis_direction.cpp
   controls/controller_motion.cpp
@@ -115,6 +122,7 @@ set(libdevilutionx_SRCS
   lua/modules/dev/towners.cpp
   lua/modules/i18n.cpp
   lua/modules/items.cpp
+  lua/modules/level.cpp
   lua/modules/log.cpp
   lua/modules/monsters.cpp
   lua/modules/player.cpp
@@ -644,6 +652,7 @@ target_link_dependencies(libdevilutionx_player
   DevilutionX::SDL
   fmt::fmt
   magic_enum::magic_enum
+  sol2::sol2
   tl
   unordered_dense::unordered_dense
   libdevilutionx_game_mode
