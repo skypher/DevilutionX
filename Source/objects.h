@@ -365,4 +365,6 @@ void SyncObjectAnim(Object &object);
 void GetObjectStr(const Object &object);
 void SyncNakrulRoom();
 
+DVL_API_FOR_TEST int FindValidShrine();
+
 } // namespace devilution

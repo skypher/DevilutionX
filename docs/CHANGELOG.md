@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Gameplay
+
+- Goat Shrines and Cauldrons remain usable when "Disable Crippling Shrines" is enabled; their random rolls now skip Fascinating, Ornate, Sacred, and Murphy's shrines while those shrines stay disabled on the map.
+
 ## DevilutionX 1.5.2
 
 ### Bug Fixes

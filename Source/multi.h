@@ -23,6 +23,8 @@ struct Player;
 // must be unsigned to generate unsigned comparisons with pnum
 #define MAX_PLRS 4
 
+constexpr uint8_t GameDataFlagDisableCripplingShrines = 1 << 0;
+
 struct GameData {
 	int32_t size;
 	uint8_t reserved[4];
@@ -39,6 +41,19 @@ struct GameData {
 	uint8_t fullQuests;
 	/** Used to initialise the seed table for dungeon levels so players in multiplayer games generate the same layout */
 	uint32_t gameSeed[4];
+
+	[[nodiscard]] bool IsDisablingCripplingShrines() const
+	{
+		return (reserved[0] & GameDataFlagDisableCripplingShrines) != 0;
+	}
+
+	void SetDisableCripplingShrines(bool value)
+	{
+		if (value)
+			reserved[0] |= GameDataFlagDisableCripplingShrines;
+		else
+			reserved[0] &= static_cast<uint8_t>(~GameDataFlagDisableCripplingShrines);
+	}
 
 	void swapLE();
 };
